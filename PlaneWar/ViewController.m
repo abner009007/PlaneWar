@@ -9,9 +9,14 @@
 #import "ViewController.h"
 
 @interface ViewController ()
+{
+    NSInteger bulletTag_down;           //移动中的子弹
+    NSInteger bulletTag_wait;           //可用的子弹
+    NSInteger enemyPlaneTag_down;       //下落中的敌机
+    NSInteger enemyPlaneTag_wait;       //可用的敌机
+}
 
 @property(nonatomic,strong) UIButton * startButton;
-
 @property(nonatomic,strong) UIImageView * bgImageView1;
 @property(nonatomic,strong) UIImageView * bgImageView2;
 @property(nonatomic,strong) UIImageView * planeImageView;
@@ -32,10 +37,12 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
+    bulletTag_down = 221;
+    bulletTag_wait = 222;
+    enemyPlaneTag_down = 119;
+    enemyPlaneTag_wait = 120;
+    
     [self creatViewControllerView];
-    
-    
-    
 }
 -(void)startButtonClick{
     self.startButton.hidden = YES;
@@ -56,21 +63,21 @@
                                                           userInfo:nil
                                                            repeats:YES];
     //负责子弹的移动
-    self.moveBulletTimer =[NSTimer scheduledTimerWithTimeInterval:0.01
-                                                           target:self
-                                                         selector:@selector(myBulletMove)
-                                                         userInfo:nil
-                                                          repeats:YES];
+    self.moveBulletTimer = [NSTimer scheduledTimerWithTimeInterval:0.01
+                                                            target:self
+                                                          selector:@selector(myBulletMove)
+                                                          userInfo:nil
+                                                           repeats:YES];
     //定时寻找可以下落的敌机
     self.findEnemyPlaneTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                                 target:self
-                                                              selector:@selector(findDiji)
+                                                              selector:@selector(findEnemyPlane)
                                                               userInfo:nil
                                                                repeats:YES];
     //定时器让敌机下落
     self.moveEnemyPlaneTimer = [NSTimer scheduledTimerWithTimeInterval:0.05
                                                                 target:self
-                                                              selector:@selector(dijiDown)
+                                                              selector:@selector(enemyPlaneDown)
                                                               userInfo:nil
                                                                repeats:YES];
     //爆炸动画
@@ -100,19 +107,42 @@
     [self.collisionBoomTimer invalidate];
     self.collisionBoomTimer = nil;
     
-    self.planeImageView.hidden = YES;
-    self.startButton.hidden = NO;
-    
-    for (int i = 0; i < self.bulletArray.count; i++)
-    {
-        UIImageView * myBullet = [self.bulletArray objectAtIndex:i];
-        
-        if (myBullet.tag == 221){
-            [myBullet removeFromSuperview];
-            myBullet.tag = 222;
+    for (UIImageView * bulletImageView in self.bulletArray) {
+        if (bulletImageView.tag == bulletTag_down){
+            [bulletImageView removeFromSuperview];
+            bulletImageView.tag = bulletTag_wait;
         }
     }
+    
+    for (UIImageView * enemyPlaneImageView in self.enemyPlaneArray){
+        if (enemyPlaneImageView.tag == enemyPlaneTag_down){
+            [enemyPlaneImageView removeFromSuperview];
+            enemyPlaneImageView.tag = enemyPlaneTag_wait;
+        }
+    }
+    
+    CGFloat time = 0.5;
+    CGFloat repeatCount = 3;
+    CGFloat afterDelay = time * repeatCount;
+    [self.planeImageView.layer addAnimation:[self opacityForever_Animation:time repeatCount:repeatCount] forKey:nil];
+    [self performSelector:@selector(startAgain) withObject:nil afterDelay:afterDelay];
 }
+-(void)startAgain{
+    self.planeImageView.hidden = YES;
+    self.startButton.hidden = NO;
+    self.planeImageView.bounds = CGRectMake(0, 0, 40, 40);
+    self.planeImageView.center = CGPointMake(self.view.frame.size.width*0.5, self.view.frame.size.height*0.5);
+}
+-(CABasicAnimation *)opacityForever_Animation:(float)time repeatCount:(int)repeatCount{
+    CABasicAnimation *animation = [CABasicAnimation animationWithKeyPath:@"opacity"];//必须写opacity才行。
+    animation.fromValue = [NSNumber numberWithFloat:1.0f];
+    animation.toValue = [NSNumber numberWithFloat:0.0f];//这是透明度。
+    animation.duration = time;
+    animation.repeatCount = repeatCount;
+    animation.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseInEaseOut];///没有的话是均匀的动画。
+    return animation;
+}
+
 -(void)creatViewControllerView{
     
     self.bgImageView1.frame = CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height);
@@ -120,7 +150,7 @@
     self.bgImageView2.frame = CGRectMake(0, -self.view.frame.size.height, self.view.frame.size.width, self.view.frame.size.height);
     [self.view addSubview:self.bgImageView2];
     
-    self.planeImageView.bounds = CGRectMake(0, 0, 60, 60);
+    self.planeImageView.bounds = CGRectMake(0, 0, 40, 40);
     self.planeImageView.center = CGPointMake(self.view.frame.size.width*0.5, self.view.frame.size.height*0.5);
     [self.view addSubview:self.planeImageView];
     
@@ -143,12 +173,12 @@
 
 
 //寻找可用的敌机
-- (void)findDiji{
+- (void)findEnemyPlane{
     //找到数组中没有在下落的敌机，把它tag值设为下落，立马下落（另一个定时器控制）
     for (int i = 0; i < self.enemyPlaneArray.count; i++) {
-        UIImageView * diji = [self.enemyPlaneArray objectAtIndex:i];
-        if (diji.tag == 120) {
-            diji.tag = 119;
+        UIImageView * enemyPlaneImageView = [self.enemyPlaneArray objectAtIndex:i];
+        if (enemyPlaneImageView.tag == enemyPlaneTag_wait) {
+            enemyPlaneImageView.tag = enemyPlaneTag_down;
             //把敌机出来的位置重置一下，保证在屏幕上边
             int pointX = arc4random() % (int)self.view.frame.size.width;
             
@@ -158,23 +188,23 @@
                 pointX = self.view.frame.size.width - 40;
             }
             
-            diji.frame =  CGRectMake(pointX, -40, 40, 40);
+            enemyPlaneImageView.frame =  CGRectMake(pointX, -40, 40, 40);
             //把敌机再添加在屏幕上，因为爆炸完把它移除了
-            [self.view addSubview:diji];
+            [self.view addSubview:enemyPlaneImageView];
             break;
         }
     }
 }
 //敌机下落
--(void)dijiDown{
+-(void)enemyPlaneDown{
     //需找数组中 可以下落的敌机，让其下落
     for (int i = 0; i < self.enemyPlaneArray.count; i++){
-        UIImageView *diji = [self.enemyPlaneArray objectAtIndex:i];
-        if (diji.tag == 119){
-            diji.frame = CGRectMake(diji.frame.origin.x, diji.frame.origin.y + 5, 40, 40);
+        UIImageView *enemyPlaneImageView = [self.enemyPlaneArray objectAtIndex:i];
+        if (enemyPlaneImageView.tag == enemyPlaneTag_down){
+            enemyPlaneImageView.frame = CGRectMake(enemyPlaneImageView.frame.origin.x, enemyPlaneImageView.frame.origin.y + 5, 40, 40);
             
             //如果敌机跑出屏幕 就让其tag改为没有在下落，并且回到屏幕上方，等待下落
-            if (diji.frame.origin.y >= self.view.frame.size.height){
+            if (enemyPlaneImageView.frame.origin.y >= self.view.frame.size.height){
                 int pointX = arc4random() % (int)self.view.frame.size.width;
                 
                 if (pointX <= 40) {
@@ -182,8 +212,8 @@
                 } else if (pointX > (self.view.frame.size.width -40)) {
                     pointX = self.view.frame.size.width - 40;
                 }
-                diji.tag = 120;
-                diji.frame = CGRectMake(pointX, -40, 40, 40);
+                enemyPlaneImageView.tag = enemyPlaneTag_wait;
+                enemyPlaneImageView.frame = CGRectMake(pointX, -40, 40, 40);
             }
         }
     }
@@ -191,20 +221,19 @@
 //检测碰撞 爆炸
 - (void)collisionBoom {
     //找到dijiArr数组中属于UIImageView类型的对象，用diji指针接收
-    //泛型遍历
     for (UIImageView * diji in self.enemyPlaneArray)
     {
-        if (diji.tag == 119)
+        if (diji.tag == enemyPlaneTag_down)
         {
             //找正在运行中的子弹
             for (int i = 0; i < self.bulletArray.count; i++)
             {
                 UIImageView * myBullet = [self.bulletArray objectAtIndex:i];
                 
-                if (myBullet.tag == 221){
+                if (myBullet.tag == bulletTag_down){
                     if (CGRectIntersectsRect(diji.frame, myBullet.frame)){
                         [myBullet removeFromSuperview];
-                        myBullet.tag = 222;
+                        myBullet.tag = bulletTag_wait;
                         [self startBoomAnimation:diji];
                     }
                 }
@@ -244,27 +273,24 @@
     
     //爆炸完 把子弹 和 敌机移除
     //延迟0.5秒 敌机移除
-    [self performSelector:@selector(moveTheDiji:) withObject:imgView afterDelay:0.5];
+    [self performSelector:@selector(removeImageView:) withObject:imgView afterDelay:0.5];
     [imageView removeFromSuperview];
-    imageView.tag = 120;
+    imageView.tag = enemyPlaneTag_wait;
 }
-- (void)moveTheDiji:(UIImageView *)diji{
-    [diji removeFromSuperview];
+- (void)removeImageView:(UIImageView *)imageView{
+    [imageView removeFromSuperview];
 }
 //====================================我方数据准备======================================
 //寻找可以下落的子弹
-- (void)findMyBullet
-{
+- (void)findMyBullet{
     //找到屏幕上我的战机
-    
     for (int i = 0; i < self.bulletArray.count; i++) {
-        
-        UIImageView *myBullet = [self.bulletArray objectAtIndex:i];
-        if (myBullet.tag == 222) {
-            myBullet.tag = 221;
+        UIImageView * bulletImageView = [self.bulletArray objectAtIndex:i];
+        if (bulletImageView.tag == bulletTag_wait) {
+            bulletImageView.tag = bulletTag_down;
             //设置子弹出现的位置为飞机的机头位置
-            myBullet.center = CGPointMake(self.planeImageView.center.x+2, self.planeImageView.center.y - 30);
-            [self.view addSubview:myBullet];
+            bulletImageView.center = CGPointMake(self.planeImageView.center.x+2, self.planeImageView.center.y - 30);
+            [self.view addSubview:bulletImageView];
             //把飞机的层次 调到子弹之上
             [self.view bringSubviewToFront:self.planeImageView];
             break;
@@ -274,13 +300,13 @@
 //移动子弹
 - (void)myBulletMove {
     for (int i = 0; i < self.bulletArray.count; i++){
-        UIImageView *myBullet = [self.bulletArray objectAtIndex:i];
-        if (myBullet.tag == 221) {
-            myBullet.frame = CGRectMake(myBullet.frame.origin.x, myBullet.frame.origin.y - 5, 10, 20);
+        UIImageView *bulletImageView = [self.bulletArray objectAtIndex:i];
+        if (bulletImageView.tag == bulletTag_down) {
+            bulletImageView.frame = CGRectMake(bulletImageView.frame.origin.x, bulletImageView.frame.origin.y - 5, 10, 20);
             //如果子弹飞出屏幕 就把tag设为可以重用  并且从父视图移除
-            if (myBullet.frame.origin.y <= 0){
-                myBullet.tag = 222;
-                [myBullet removeFromSuperview];
+            if (bulletImageView.frame.origin.y <= 0){
+                bulletImageView.tag = bulletTag_wait;
+                [bulletImageView removeFromSuperview];
             }
         }
     }
@@ -299,6 +325,9 @@
         self.bgImageView2.frame = CGRectMake(0, -self.view.frame.size.height, self.view.frame.size.width, self.view.frame.size.height);
     }
 }
+
+
+
 -(NSArray *)bulletArray{
     if (!_bulletArray) {
         NSMutableArray * array = [[NSMutableArray alloc] init];
@@ -308,7 +337,7 @@
             myBullet.center =CGPointMake(self.planeImageView.center.x, self.planeImageView.center.y - self.planeImageView.bounds.size.height/2 - self.planeImageView.frame.size.height/2 - 10);
             myBullet.bounds = CGRectMake(0, 0, 10, 20);
             myBullet.image = [UIImage imageNamed:@"zidan"];
-            myBullet.tag = 222;
+            myBullet.tag = bulletTag_wait;
             [array  addObject:myBullet];
         }
         _bulletArray = [NSArray arrayWithArray:array];
@@ -329,7 +358,7 @@
             
             UIImageView * diji = [[UIImageView alloc] initWithFrame:CGRectMake(pointX, -40, 40, 40)];
             diji.image = [UIImage imageNamed:@"diji"];
-            diji.tag = 120;//表示没有在下落
+            diji.tag = enemyPlaneTag_wait;
             [array addObject:diji];
         }
         _enemyPlaneArray = [NSArray arrayWithArray:array];
@@ -340,7 +369,6 @@
     if (!_planeImageView) {
         _planeImageView = [[UIImageView alloc] initWithFrame:CGRectZero];
         _planeImageView.userInteractionEnabled = YES;
-        _planeImageView.tag = 10086;
         _planeImageView.image = [UIImage imageNamed:@"plane1"];
         
         NSMutableArray * arr = [[NSMutableArray alloc] init];
